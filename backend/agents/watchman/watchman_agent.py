@@ -49,7 +49,15 @@ class WatchmanAgent:
     async def receive_event(self, payload: dict[str, Any]) -> None:
         """Validate quickly, then process in background so HTTP can return immediately."""
         self.validate_event(payload)
-        asyncio.create_task(self._process_event(payload))
+        task = asyncio.create_task(self._process_event(payload))
+        task.add_done_callback(self._log_background_task_result)
+
+    @staticmethod
+    def _log_background_task_result(task: asyncio.Task[Any]) -> None:
+        try:
+            task.result()
+        except Exception:
+            logger.exception("watchman_background_process_failed")
 
     def validate_event(self, payload: dict[str, Any]) -> None:
         if not isinstance(payload, dict):
@@ -153,6 +161,7 @@ class WatchmanAgent:
             )
 
     async def dispatch_to_orchestrator(self, state: dict[str, Any]) -> None:
+        print("[Watchman] dispatch_start")
         try:
             from backend.orchestrator import router as orchestrator_router  # type: ignore
 
@@ -162,6 +171,7 @@ class WatchmanAgent:
                     await handler(state)
                 else:
                     handler(state)
+                print("[Watchman] dispatch_via=orchestrator.router")
                 return
         except Exception:
             logger.exception("watchman_dispatch_router_failed")
@@ -175,11 +185,43 @@ class WatchmanAgent:
                     await handler(state)
                 else:
                     handler(state)
+                print("[Watchman] dispatch_via=orchestrator.langgraph_service")
                 return
         except Exception:
             logger.exception("watchman_dispatch_langgraph_failed")
 
-        logger.warning("watchman_dispatch_skipped", extra={"event": {"reason": "No orchestrator handler found"}})
+        # Fallback 1: call workflow directly when router/service wiring is unavailable.
+        try:
+            from backend.graph.workflow import run_workflow  # type: ignore
+
+            result_state = await run_workflow(state)
+            if isinstance(result_state, dict):
+                state.update(result_state)
+            logger.warning("watchman_dispatch_fallback_workflow")
+            print("[Watchman] dispatch_via=fallback.workflow")
+            return
+        except Exception:
+            logger.exception("watchman_dispatch_fallback_workflow_failed")
+
+        # Fallback 2: ensure triage still runs even without full graph.
+        try:
+            from backend.agents import triage_agent as triage_module  # type: ignore
+
+            handler = getattr(triage_module, "handle_event", None) or getattr(triage_module, "run", None)
+            if handler:
+                result = handler(state)
+                if hasattr(result, "__await__"):
+                    result = await result
+                if isinstance(result, dict):
+                    state.update(result)
+                logger.warning("watchman_dispatch_fallback_triage_only")
+                print("[Watchman] dispatch_via=fallback.triage")
+                return
+        except Exception:
+            logger.exception("watchman_dispatch_fallback_triage_failed")
+
+        logger.warning("watchman_dispatch_skipped", extra={"event": {"reason": "No orchestrator/triage handler found"}})
+        print("[Watchman] dispatch_via=skipped")
 
     async def _process_event(self, payload: dict[str, Any]) -> None:
         parsed_event = await self.parse_event_with_langchain(payload)

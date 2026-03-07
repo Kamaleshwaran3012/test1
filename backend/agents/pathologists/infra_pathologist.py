@@ -1,13 +1,15 @@
-import json
-from langchain_google_genai import ChatGoogleGenerativeAI
-from agents.state import AgentState
-from prompts.infra_prompt import INFRA_PATHOLOGIST_PROMPT
+import logging
 
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash",
-    temperature=0
+from backend.agents.gemini_client import (
+    DEFAULT_LLM_MODEL,
+    GeminiQuotaExceededError,
+    invoke_text,
+    parse_json_dict,
 )
+from backend.agents.state import AgentState
+from backend.prompts.infra_prompt import INFRA_PATHOLOGIST_PROMPT
+
+logger = logging.getLogger("agents.infra_pathologist")
 
 
 def infra_pathologist(state: AgentState):
@@ -19,11 +21,14 @@ def infra_pathologist(state: AgentState):
         files_context=state.get("files_context", {})
     )
 
-    response = llm.invoke(prompt)
-
     try:
-        result = json.loads(response.content)
+        response_text = invoke_text(prompt, model=DEFAULT_LLM_MODEL, temperature=0)
+        result = parse_json_dict(response_text)
+    except GeminiQuotaExceededError:
+        logger.warning("infra_pathologist_llm_quota_exhausted")
+        result = {}
     except Exception:
+        logger.exception("infra_pathologist_llm_fallback")
         result = {}
 
     return {
