@@ -50,19 +50,25 @@ async def triage_node(state: AgentState) -> dict[str, Any]:
 async def infra_pathologist_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Infra pathologist selected")
     print("[Workflow] node=infra_pathologist")
-    return await _call_agent("backend.agents.pathologists.infra_pathologist", "Infra pathologist", state)
+    result = await _call_agent("backend.agents.pathologists.infra_pathologist", "Infra pathologist", state)
+    result["error_source"] = "infra_pathologist"
+    return result
 
 
 async def runtime_pathologist_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Runtime pathologist selected")
     print("[Workflow] node=runtime_pathologist")
-    return await _call_agent("backend.agents.pathologists.runtime_pathologist", "Runtime pathologist", state)
+    result = await _call_agent("backend.agents.pathologists.runtime_pathologist", "Runtime pathologist", state)
+    result["error_source"] = "runtime_pathologist"
+    return result
 
 
 async def build_pathologist_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Build pathologist selected")
     print("[Workflow] node=build_pathologist")
-    return await _call_agent("backend.agents.pathologists.build_pathologist", "Build pathologist", state)
+    result = await _call_agent("backend.agents.pathologists.build_pathologist", "Build pathologist", state)
+    result["error_source"] = "build_pathologist"
+    return result
 
 
 async def root_cause_node(state: AgentState) -> dict[str, Any]:
@@ -94,7 +100,6 @@ def build_workflow():
     graph.add_node("runtime_pathologist", runtime_pathologist_node)
     graph.add_node("build_pathologist", build_pathologist_node)
     graph.add_node("root_cause", root_cause_node)
-    graph.add_node("surgeon", surgeon_node)
 
     graph.set_entry_point("triage")
     graph.add_conditional_edges(
@@ -109,8 +114,7 @@ def build_workflow():
     graph.add_edge("infra_pathologist", "root_cause")
     graph.add_edge("runtime_pathologist", "root_cause")
     graph.add_edge("build_pathologist", "root_cause")
-    graph.add_edge("root_cause", "surgeon")
-    graph.add_edge("surgeon", END)
+    graph.add_edge("root_cause", END)
 
     return graph.compile()
 

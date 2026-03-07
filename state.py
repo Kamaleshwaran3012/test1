@@ -2,148 +2,111 @@ import json
 import subprocess
 
 from agents.root_cause_agent import RootCauseAgent
-from agents.surgeon_agent import SurgeonAgent
-
-from utils.slack_notify import send_slack_notification
-from utils.run_tests import run_tests
-from utils.git_push import push_changes
+from backend.agents.pathologists.build_pathologist import build_pathologist
+from backend.agents.pathologists.infra_pathologist import infra_pathologist
+from backend.agents.pathologists.runtime_pathologist import runtime_pathologist
 from utils.create_pr import create_pull_request
+from utils.git_push import push_changes
+from utils.run_tests import run_tests
+from utils.slack_notify import send_slack_notification
 
 
-# -------------------------------------------------
-# Initial State (Input from Pathologist / Watchman)
-# -------------------------------------------------
+def _select_pathologist(state):
+    source = str(state.get("error_type") or state.get("diagnosis_type") or "").strip().lower()
+    if source == "infra":
+        return "infra_pathologist", infra_pathologist
+    if source == "build":
+        return "build_pathologist", build_pathologist
+    return "runtime_pathologist", runtime_pathologist
+
+
+def _merge_pathologist_output(state, pathologist_result, source):
+    merged = dict(state)
+    merged.update(pathologist_result or {})
+    merged["error_source"] = source
+
+    logs = []
+    logs.extend(state.get("agent_logs", []))
+    logs.extend((pathologist_result or {}).get("agent_logs", []))
+    merged["agent_logs"] = logs
+    return merged
+
+
+def _trigger_code_review(pr_link):
+    # Minimal placeholder wiring for post-PR review trigger.
+    print(f"Code review triggered for PR: {pr_link}")
+
 
 state = {
-
-    "diagnosis_type": "BUILD",
-
-    "file_path": "Test1/.github/workflows/ci.yml",
-
-    "line_number": 19,
-
-    "fix_description": "npm install is unreliable in CI",
-
-    "replacement_code": "        run: npm install",
-
+    "error_type": "build",
+    "current_error": "CI pipeline failed during dependency installation",
     "error_log": "CI pipeline failed during dependency installation",
-
+    "suspected_service": "github-actions",
+    "files_context": {},
+    "event_source": "github",
     "agent_logs": []
 }
 
 
-# -------------------------------------------------
-# Root Cause Analysis
-# -------------------------------------------------
+source_name, pathologist_fn = _select_pathologist(state)
+pathologist_result = pathologist_fn(state)
+state = _merge_pathologist_output(state, pathologist_result, source_name)
+
+print("\nPATHOLOGIST OUTPUT:\n")
+print(json.dumps({
+    "error_source": state.get("error_source"),
+    "diagnosis_type": state.get("diagnosis_type"),
+    "file_path": state.get("file_path"),
+    "line_number": state.get("line_number"),
+    "fix_description": state.get("fix_description")
+}, indent=2))
+
 
 root_agent = RootCauseAgent()
-
 state = root_agent.analyze(state)
 
-print("\nROOT CAUSE OUTPUT:\n")
-
+print("\nROOT->SURGEON OUTPUT:\n")
 print(json.dumps({
     "root_cause": state.get("root_cause"),
-    "confidence_score": state.get("confidence_score")
+    "confidence_score": state.get("confidence_score"),
+    "patch_generated": bool(state.get("patch_generated"))
 }, indent=2))
 
 
-# -------------------------------------------------
-# Surgeon Agent
-# -------------------------------------------------
-
-surgeon = SurgeonAgent()
-
-state = surgeon.repair(state)
-
-print("\nSURGEON OUTPUT:\n")
-
-print(json.dumps({
-    "patch_generated": bool(state.get("patch_generated")),
-    "pr_title": state.get("pr_title"),
-    "pr_description": state.get("pr_description")
-}, indent=2))
-
-
-# -------------------------------------------------
-# Save Patch
-# -------------------------------------------------
-
-if state.get("patch_generated"):
-
-    patch_file = "fix.patch"
-
-    with open(patch_file, "w", encoding="utf-8", newline="\n") as f:
-        f.write(state["patch_generated"])
-
-    print("\nPatch saved as fix.patch")
-
-    try:
-
-        # -------------------------------------------------
-        # Validate Patch
-        # -------------------------------------------------
-
-        subprocess.run(
-            ["git", "apply", "--check", patch_file],
-            check=True
-        )
-
-        # -------------------------------------------------
-        # Apply Patch
-        # -------------------------------------------------
-
-        subprocess.run(
-            ["git", "apply", patch_file],
-            check=True
-        )
-
-        print("\nPatch applied successfully!")
-
-        # -------------------------------------------------
-        # Run Tests
-        # -------------------------------------------------
-
-        logs = run_tests()
-
-        if logs["success"]:
-
-            print("\nTests passed!")
-
-            # push changes
-            push_changes()
-
-            # create PR
-            pr_link = create_pull_request()
-
-            send_slack_notification(
-                f"✅ CI issue fixed automatically\n"
-                f"Root Cause: {state.get('root_cause')}\n"
-                f"Pull Request: {pr_link}"
-            )
-
-        else:
-
-            print("\nTests failed again!")
-
-            send_slack_notification(
-                "⚠️ Automated fix attempted but tests still failing.\n"
-                "Developer intervention required."
-            )
-
-    except subprocess.CalledProcessError:
-
-        print("\nPatch could not be applied automatically.")
-
-        send_slack_notification(
-            "❌ Patch generation succeeded but git apply failed."
-        )
-
-
-else:
-
-    print("\nNo patch was generated.")
-
+if state.get("error_source") == "infra_pathologist":
     send_slack_notification(
-        "⚠️ SurgeonAgent could not generate a patch."
+        f"Infra issue detected. Suggested fix: {state.get('fix_description')}"
     )
+    print("\nInfra flow complete: Slack notification sent, PR/code review skipped.")
+else:
+    if state.get("patch_generated"):
+        patch_file = "fix.patch"
+        with open(patch_file, "w", encoding="utf-8", newline="\n") as f:
+            f.write(state["patch_generated"])
+
+        print("\nPatch saved as fix.patch")
+
+        try:
+            subprocess.run(["git", "apply", "--check", patch_file], check=True)
+            subprocess.run(["git", "apply", patch_file], check=True)
+            logs = run_tests()
+
+            if logs["success"]:
+                push_changes()
+                pr_link = create_pull_request()
+                _trigger_code_review(pr_link)
+                send_slack_notification(
+                    f"CI issue fixed automatically.\n"
+                    f"Root Cause: {state.get('root_cause')}\n"
+                    f"Pull Request: {pr_link}"
+                )
+            else:
+                send_slack_notification(
+                    "Automated fix attempted but tests are still failing."
+                )
+        except subprocess.CalledProcessError:
+            send_slack_notification(
+                "Patch generation succeeded but git apply failed."
+            )
+    else:
+        send_slack_notification("No patch was generated by SurgeonAgent.")

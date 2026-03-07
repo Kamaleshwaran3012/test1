@@ -23,6 +23,7 @@ class AgentState(TypedDict, total=False):
     line_number: Optional[int]
     fix_description: Optional[str]
     replacement_code: Optional[str]
+    error_source: Optional[str]
 
     # ROOT CAUSE
     root_cause: Optional[str]
