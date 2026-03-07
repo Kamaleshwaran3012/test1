@@ -1,8 +1,74 @@
 import os
-import difflib
+import subprocess
+import tempfile
 
 
 class SurgeonAgent:
+    def _read_text_with_fallback(self, file_path):
+        encodings = ("utf-8", "utf-8-sig", "cp1252", "latin-1")
+        for encoding in encodings:
+            try:
+                with open(file_path, "r", encoding=encoding, newline="") as f:
+                    return f.read(), encoding
+            except UnicodeDecodeError:
+                continue
+        raise ValueError(f"Unable to decode file as text: {file_path}")
+
+    def _detect_newline(self, text):
+        if "\r\n" in text:
+            return "\r\n"
+        if "\r" in text:
+            return "\r"
+        return "\n"
+
+    def _generate_git_patch(self, file_path, modified_text, encoding):
+        temp_path = None
+        try:
+            target_dir = os.path.dirname(file_path) or "."
+            fd, temp_path = tempfile.mkstemp(
+                dir=target_dir,
+                suffix=".surgeon.tmp"
+            )
+            os.close(fd)
+            with open(temp_path, "w", encoding=encoding, newline="") as tmp:
+                tmp.write(modified_text)
+
+            temp_rel = os.path.relpath(temp_path).replace("\\", "/")
+            file_norm = file_path.replace("\\", "/")
+
+            result = subprocess.run(
+                [
+                    "git",
+                    "diff",
+                    "--no-index",
+                    "--src-prefix=a/",
+                    "--dst-prefix=b/",
+                    "--",
+                    file_norm,
+                    temp_rel
+                ],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+
+            # git diff returns 1 when differences exist.
+            if result.returncode not in (0, 1):
+                raise RuntimeError(result.stderr.strip() or "git diff failed")
+
+            patch = result.stdout
+            if not patch:
+                return ""
+
+            patch = patch.replace(temp_rel, file_norm)
+
+            if not patch.endswith("\n"):
+                patch += "\n"
+
+            return patch
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def repair(self, state):
 
@@ -32,33 +98,28 @@ class SurgeonAgent:
             )
             return state
 
-        # Read real repository file
-        with open(file_path, "r", encoding="utf-8") as f:
-            original_lines = f.readlines()
+        # Read text while preserving original newline style.
+        original_text, encoding = self._read_text_with_fallback(file_path)
+        newline = self._detect_newline(original_text)
+        original_lines = original_text.splitlines(keepends=True)
 
-        modified_lines = original_lines.copy()
+        modified_lines = list(original_lines)
+        replacement_line = replacement_code
+        if not replacement_line.endswith(("\n", "\r")):
+            replacement_line += newline
 
-        # Apply modification dynamically
+        # Apply modification dynamically.
         if line_number is not None and 0 < line_number <= len(modified_lines):
-            modified_lines[line_number - 1] = replacement_code + "\n"
+            modified_lines[line_number - 1] = replacement_line
         else:
-            # fallback: append fix if line not available
-            modified_lines.append(replacement_code + "\n")
+            if modified_lines and not modified_lines[-1].endswith(("\n", "\r")):
+                modified_lines[-1] += newline
+            modified_lines.append(replacement_line)
 
-        # Generate unified diff patch dynamically
-        diff = difflib.unified_diff(
-            original_lines,
-            modified_lines,
-            fromfile=f"a/{file_path}",
-            tofile=f"b/{file_path}",
-            lineterm="\n"
-        )
+        modified_text = "".join(modified_lines)
+        patch = self._generate_git_patch(file_path, modified_text, encoding)
 
-        patch = "".join(diff)
-        if patch and not patch.endswith("\n"):
-            patch += "\n"
-
-        state["patch_generated"] = patch
+        state["patch_generated"] = patch or None
 
         state["pr_title"] = f"Automated Fix: {os.path.basename(file_path)}"
 
