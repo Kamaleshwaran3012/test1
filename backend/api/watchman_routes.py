@@ -52,12 +52,32 @@ def _adapt_github_payload(payload: dict[str, Any], github_event: str) -> dict[st
     }
 
 
+def _should_dispatch_github_event(raw_payload: dict[str, Any], github_event: str) -> bool:
+    # Keep Watchman focused on actionable failure signals from CI/CD.
+    if github_event == "workflow_run":
+        workflow_run = raw_payload.get("workflow_run") or {}
+        return workflow_run.get("status") == "completed" and workflow_run.get("conclusion") == "failure"
+
+    if github_event == "check_suite":
+        check_suite = raw_payload.get("check_suite") or {}
+        return check_suite.get("status") == "completed" and check_suite.get("conclusion") == "failure"
+
+    return False
+
+
 @router.post("/event", status_code=status.HTTP_200_OK)
 async def receive_watchman_event(payload: dict[str, Any], request: Request) -> dict[str, Any]:
-    event_payload = dict(payload)
+    raw_payload = dict(payload)
+    event_payload = dict(raw_payload)
     github_event = request.headers.get("X-GitHub-Event")
     if github_event and "source" not in event_payload:
-        event_payload = _adapt_github_payload(event_payload, github_event)
+        event_payload = _adapt_github_payload(raw_payload, github_event)
+        if not _should_dispatch_github_event(raw_payload, github_event):
+            logger.info(
+                "watchman_github_event_ignored",
+                extra={"event": {"github_event": github_event}},
+            )
+            return {"status": "ok", "message": f"GitHub event ignored: {github_event}"}
 
     try:
         await watchman_agent.receive_event(event_payload)

@@ -189,6 +189,18 @@ class WatchmanAgent:
         state["agent_logs"].append("Event normalized using LangChain")
         state["agent_logs"].append(f"Service {parsed_event.get('service_name')} detected")
         state["agent_logs"].append("Global state initialized")
+        normalized_error_log = state.get("error_log")
+        logger.info(
+            "watchman_normalized_error_log",
+            extra={
+                "event": {
+                    "source": state.get("event_source"),
+                    "service": state.get("suspected_service"),
+                    "error_log": normalized_error_log,
+                }
+            },
+        )
+        print(f"[Watchman] normalized_error_log_for_pathologist={normalized_error_log}")
 
         await self.dispatch_to_orchestrator(state)
         state["agent_logs"].append("Event dispatched to orchestrator")
