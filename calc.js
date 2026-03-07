@@ -16,7 +16,7 @@ export default function Calculator() {
   }
 
   function subtractNumbers() {
-    const sub = parseInt(num1) - parseInt(num2)
+    const sub = parseInt(num11) - parseInt(num2)
     setResult(sub)
   }
 
