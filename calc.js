@@ -9,7 +9,7 @@ export default function Calculator() {
   const [result, setResult] = useState(0)
 
   function addNumbers() {
-    const sum = parseInt(num1) + parseInt(num2)
+    const sum2 = parseInt(num1) + parseInt(num2)
     const num1=0;
     const num =num1/0;
     setResult(sum)
