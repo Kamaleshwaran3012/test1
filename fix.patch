@@ -1,10 +1,13 @@
 diff --git a/Test1/.github/workflows/ci.yml b/Test1/.github/workflows/ci.yml
-index 347ea22..f51563d 100644
+index a030528..f1cca58 100644
 --- a/Test1/.github/workflows/ci.yml
 +++ b/Test1/.github/workflows/ci.yml
-@@ -22,4 +22,4 @@ jobs:
+@@ -16,7 +16,7 @@ jobs:
+         uses: actions/setup-node@v4
+         with:
+           node-version: 20
+-
++        run: npm install
+         run: Install dependencies
+         
  
-       - name: Run tests
-         run: npm test
--        run: npm install
-+        run: npm ci

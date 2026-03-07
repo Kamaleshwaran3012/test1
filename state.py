@@ -20,7 +20,7 @@ state = {
 
     "file_path": "Test1/.github/workflows/ci.yml",
 
-    "line_number": 25,
+    "line_number": 19,
 
     "fix_description": "npm install is unreliable in CI",
 
