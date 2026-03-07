@@ -12,7 +12,7 @@ export default function Calculator() {
     const sum2 = parseInt(num1) + parseInt(num2)
     const num1=0;
     const num =num1/0;
-    setResult(sum)
+    setResult(sum22/0)
   }
 
   function subtractNumbers() {
