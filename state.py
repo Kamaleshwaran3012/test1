@@ -4,17 +4,25 @@ import subprocess
 from agents.surgeon_agent import SurgeonAgent
 from utils.slack_notify import send_slack_notification
 from utils.run_tests import run_tests
+from utils.git_push import push_changes
+from utils.create_pr import create_pull_request
+
 
 
 state = {
-    "diagnosis_type": "CODE",
-    "file_path": "test_repo/requirements.txt",
-    "line_number": None,
-    "fix_description": "Missing pandas dependency",
-    "replacement_code": "pandas>=2.0.0",
-    "error_log": "ModuleNotFoundError: No module named pandas",
-    "root_cause": "The dependency pandas is not listed in requirements.txt",
-    "confidence_score": 0.92,
+
+    "diagnosis_type": "BUILD",
+
+    "file_path": "Test1/.github/workflows/ci.yml",
+
+    "line_number": 19,
+
+    "fix_description": "npm install is unreliable in CI",
+
+    "replacement_code": "        run: npm ci",
+
+    "root_cause": "npm install may produce inconsistent dependency trees in CI environments",
+
     "agent_logs": []
 }
 
@@ -74,11 +82,14 @@ if state.get("patch_generated"):
         if logs["success"]:
 
             print("\nTests passed!")
+            push_changes()
+
+            pr_link = create_pull_request()
 
             send_slack_notification(
-                "✅ CI issue fixed automatically.\n"
-                "Patch applied successfully.\n"
-                "All tests passed."
+                f"✅ CI issue fixed automatically.\n"
+                f"Tests passed.\n"
+                f"Pull Request created: {pr_link}"
             )
 
         else:

@@ -1,9 +1,13 @@
-diff --git a/test_repo/requirements.txt b/test_repo/requirements.txt
-index 9c4a909..5a5f8d2 100644
---- a/test_repo/requirements.txt
-+++ b/test_repo/requirements.txt
-@@ -7,3 +7,4 @@ pandas>=2.0.0
- pandas>=2.0.0
- pandas>=2.0.0
- pandas>=2.0.0
-+pandas>=2.0.0
+diff --git a/Test1/.github/workflows/ci.yml b/Test1/.github/workflows/ci.yml
+index 8071dbe..9f5ca7f 100644
+--- a/Test1/.github/workflows/ci.yml
++++ b/Test1/.github/workflows/ci.yml
+@@ -16,7 +16,7 @@ jobs:
+         uses: actions/setup-node@v4
+         with:
+           node-version: 20
+-
++        run: npm ci
+         run: Install dependencies
+         run: npm install
+ 
