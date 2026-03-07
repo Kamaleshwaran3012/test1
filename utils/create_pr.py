@@ -1,5 +1,5 @@
-import os
 from github import Github
+import os
 
 def create_pull_request():
 
@@ -15,7 +15,5 @@ def create_pull_request():
         head="surgeon_agents",
         base="main"
     )
-
-    print("PR created:", pr.html_url)
 
     return pr.html_url
