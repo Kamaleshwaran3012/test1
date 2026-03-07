@@ -20,11 +20,11 @@ state = {
 
     "file_path": "Test1/.github/workflows/ci.yml",
 
-    "line_number": 19,
+    "line_number": 25,
 
     "fix_description": "npm install is unreliable in CI",
 
-    "replacement_code": "        run: npm ci",
+    "replacement_code": "        run: npm install",
 
     "error_log": "CI pipeline failed during dependency installation",
 
