@@ -9,7 +9,7 @@ from backend.agents.watchman.watchman_agent import WatchmanAgent
 
 
 logger = logging.getLogger("watchman.routes")
-router = APIRouter(prefix="/watchman", tags=["watchman"])
+router = APIRouter(tags=["watchman"])
 watchman_agent = WatchmanAgent()
 
 
@@ -65,7 +65,64 @@ def _should_dispatch_github_event(raw_payload: dict[str, Any], github_event: str
     return False
 
 
-@router.post("/event", status_code=status.HTTP_200_OK)
+def _adapt_kubernetes_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    involved_object = payload.get("involvedObject") or {}
+    service_name = (
+        payload.get("service")
+        or involved_object.get("name")
+        or involved_object.get("kind")
+        or payload.get("reportingComponent")
+        or "kubernetes-cluster"
+    )
+    reason = payload.get("reason") or payload.get("type") or "kubernetes_event"
+    message = payload.get("message") or payload.get("log") or "Kubernetes change received"
+
+    return {
+        "source": "kubernetes",
+        "service": str(service_name),
+        "log": str(message),
+        "error": str(reason),
+        "file": payload.get("file"),
+    }
+
+
+async def _dispatch_event(payload: dict[str, Any]) -> dict[str, str]:
+    try:
+        await watchman_agent.receive_event(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("watchman_route_failed", extra={"event": {"source": payload.get("source")}})
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to receive event",
+        ) from exc
+
+    return {"status": "ok", "message": "Event accepted"}
+
+
+@router.post("/webhook/github", status_code=status.HTTP_200_OK)
+async def github_webhook(payload: dict[str, Any], request: Request) -> dict[str, str]:
+    github_event = request.headers.get("X-GitHub-Event", "unknown")
+    event_payload = _adapt_github_payload(payload, github_event)
+
+    if not _should_dispatch_github_event(payload, github_event):
+        logger.info(
+            "watchman_github_event_ignored",
+            extra={"event": {"github_event": github_event}},
+        )
+        return {"status": "ok", "message": f"GitHub event ignored: {github_event}"}
+
+    return await _dispatch_event(event_payload)
+
+
+@router.post("/webhook/kubernetes", status_code=status.HTTP_200_OK)
+async def kubernetes_webhook(payload: dict[str, Any]) -> dict[str, str]:
+    event_payload = _adapt_kubernetes_payload(payload)
+    return await _dispatch_event(event_payload)
+
+
+@router.post("/watchman/event", status_code=status.HTTP_200_OK)
 async def receive_watchman_event(payload: dict[str, Any], request: Request) -> dict[str, Any]:
     raw_payload = dict(payload)
     event_payload = dict(raw_payload)
@@ -79,15 +136,4 @@ async def receive_watchman_event(payload: dict[str, Any], request: Request) -> d
             )
             return {"status": "ok", "message": f"GitHub event ignored: {github_event}"}
 
-    try:
-        await watchman_agent.receive_event(event_payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except Exception as exc:
-        logger.exception("watchman_route_failed", extra={"event": {"source": event_payload.get("source")}})
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to receive event",
-        ) from exc
-
-    return {"status": "ok", "message": "Event accepted"}
+    return await _dispatch_event(event_payload)
