@@ -72,5 +72,4 @@ OUTPUT RULES
 - Do NOT include explanations outside the JSON.
 - Ensure the JSON is valid and parseable.
 - Ensure the patch text is complete and can be applied with `git apply`.
-- comment the changed error description in the line where you modified the code
 """

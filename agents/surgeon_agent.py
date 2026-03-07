@@ -1,207 +1,74 @@
 import os
-import json
-from groq import Groq
-from prompts.surgeon_prompt import CI_PATCH_GENERATION_PROMPT
+import difflib
 
 
 class SurgeonAgent:
 
-    def __init__(self):
-        self.client = Groq(
-            api_key=os.getenv("GROQ_API_KEY")
-        )
-
-        # Strong reasoning model for patch generation
-        self.model = "llama-3.3-70b-versatile"
-
-    def _clean_json(self, text):
-        """
-        Remove markdown fences if the model adds them.
-        """
-
-        text = text.strip()
-
-        if text.startswith("```"):
-            text = text.split("```")[1]
-
-            if text.startswith("json"):
-                text = text[4:]
-
-        return text.strip()
-
     def repair(self, state):
 
         diagnosis_type = state.get("diagnosis_type")
+        file_path = state.get("file_path")
+        line_number = state.get("line_number")
+        replacement_code = state.get("replacement_code")
 
-        # -------------------------------------------------
-        # CASE 1 — INFRASTRUCTURE ERROR
-        # -------------------------------------------------
+        # Infrastructure errors cannot be auto-fixed
         if diagnosis_type == "INFRA":
-
             state["patch_generated"] = None
             state["pr_title"] = "Infrastructure Issue Detected"
             state["pr_description"] = (
-                "The failure was classified as an infrastructure issue "
-                "(e.g., cloud configuration, container orchestration, "
-                "networking, or deployment environment). "
-                "Automated code repair is not applicable. "
-                "Developer or DevOps intervention is required."
+                "The error was classified as an infrastructure issue. "
+                "Automatic code modification is not applicable."
             )
-
-            if "agent_logs" not in state:
-                state["agent_logs"] = []
-
             state["agent_logs"].append(
-                "[SurgeonAgent] Infra issue detected – notifying developer"
+                "[SurgeonAgent] Infra issue detected — developer notified"
             )
-
             return state
 
-        # -------------------------------------------------
-        # CASE 2 — BUILD OR CODE ERROR (Fixable)
-        # -------------------------------------------------
-        if diagnosis_type in ["CODE", "BUILD"]:
-
-            prompt = CI_PATCH_GENERATION_PROMPT.format(
-                root_cause=state.get("root_cause"),
-                fix_description=state.get("fix_description"),
-                file_path=state.get("file_path"),
-                line_number=state.get("line_number"),
-                replacement_code=state.get("replacement_code")
-            )
-
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a DevOps CI/CD repair agent."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=0.1
-            )
-
-            output_text = response.choices[0].message.content
-            cleaned = self._clean_json(output_text)
-
-            try:
-
-                result = json.loads(cleaned)
-
-                state["patch_generated"] = result["patch_generated"]
-                state["pr_title"] = result["pr_title"]
-                state["pr_description"] = result["pr_description"]
-
-            except Exception:
-
-                state["patch_generated"] = output_text
-                state["pr_title"] = "Automated CI Fix"
-                state["pr_description"] = (
-                    "Patch generated automatically but JSON parsing failed."
-                )
-
-            if "agent_logs" not in state:
-                state["agent_logs"] = []
-
+        # Ensure file exists
+        if not os.path.exists(file_path):
+            state["patch_generated"] = None
             state["agent_logs"].append(
-                "[SurgeonAgent] Patch generated for build/code issue"
+                f"[SurgeonAgent] File not found: {file_path}"
             )
-
             return state
 
-        # -------------------------------------------------
-        # CASE 3 — RUNTIME ERROR
-        # -------------------------------------------------
-        if diagnosis_type == "RUNTIME":
+        # Read real repository file
+        with open(file_path, "r", encoding="utf-8") as f:
+            original_lines = f.readlines()
 
-            # if replacement code exists → attempt fix
-            if state.get("replacement_code"):
+        modified_lines = original_lines.copy()
 
-                prompt = CI_PATCH_GENERATION_PROMPT.format(
-                    root_cause=state.get("root_cause"),
-                    fix_description=state.get("fix_description"),
-                    file_path=state.get("file_path"),
-                    line_number=state.get("line_number"),
-                    replacement_code=state.get("replacement_code")
-                )
+        # Apply modification dynamically
+        if line_number is not None and 0 < line_number <= len(modified_lines):
+            modified_lines[line_number - 1] = replacement_code + "\n"
+        else:
+            # fallback: append fix if line not available
+            modified_lines.append(replacement_code + "\n")
 
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a DevOps CI/CD repair agent."
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.1
-                )
-
-                output_text = response.choices[0].message.content
-                cleaned = self._clean_json(output_text)
-
-                try:
-
-                    result = json.loads(cleaned)
-
-                    state["patch_generated"] = result["patch_generated"]
-                    state["pr_title"] = result["pr_title"]
-                    state["pr_description"] = result["pr_description"]
-
-                except Exception:
-
-                    state["patch_generated"] = output_text
-                    state["pr_title"] = "Runtime Fix"
-                    state["pr_description"] = (
-                        "Runtime issue patched automatically."
-                    )
-
-                state["agent_logs"].append(
-                    "[SurgeonAgent] Runtime issue fixed automatically"
-                )
-
-                return state
-
-            # -------------------------------------------------
-            # Runtime error but no safe fix
-            # -------------------------------------------------
-            else:
-
-                state["patch_generated"] = None
-                state["pr_title"] = "Runtime Issue Requires Manual Fix"
-                state["pr_description"] = (
-                    "The runtime failure could not be safely repaired "
-                    "automatically. Developer investigation is required."
-                )
-
-                state["agent_logs"].append(
-                    "[SurgeonAgent] Runtime issue requires manual intervention"
-                )
-
-                return state
-
-        # -------------------------------------------------
-        # FALLBACK
-        # -------------------------------------------------
-
-        state["patch_generated"] = None
-        state["pr_title"] = "Unknown Failure Type"
-        state["pr_description"] = (
-            "The failure type could not be determined automatically."
+        # Generate unified diff patch dynamically
+        diff = difflib.unified_diff(
+            original_lines,
+            modified_lines,
+            fromfile=f"a/{file_path}",
+            tofile=f"b/{file_path}",
+            lineterm="\n"
         )
 
-        if "agent_logs" not in state:
-            state["agent_logs"] = []
+        patch = "".join(diff)
+        if patch and not patch.endswith("\n"):
+            patch += "\n"
+
+        state["patch_generated"] = patch
+
+        state["pr_title"] = f"Automated Fix: {os.path.basename(file_path)}"
+
+        state["pr_description"] = (
+            f"Automated fix generated after root cause analysis.\n\n"
+            f"Root Cause: {state.get('root_cause')}"
+        )
 
         state["agent_logs"].append(
-            "[SurgeonAgent] Unknown diagnosis type"
+            "[SurgeonAgent] Patch generated dynamically"
         )
 
         return state
