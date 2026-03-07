@@ -10,8 +10,8 @@ export default function Calculator() {
 
   function addNumbers() {
     const sum = parseInt(num1) + parseInt(num2)
-    const num1=0;
-    const num =num1/0;
+    const num2=0;
+    const num =num2/0;
     setResult(sum)
   }
 
