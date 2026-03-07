@@ -1,8 +1,6 @@
 import os
-import json
-import re
 from groq import Groq
-from prompts.root_cause_prompt import ROOT_CAUSE_PROMPT
+from agents.surgeon_agent import SurgeonAgent
 
 
 class RootCauseAgent:
@@ -15,48 +13,41 @@ class RootCauseAgent:
 
         self.model = "llama-3.3-70b-versatile"
 
-    def extract_json(self, text):
-
-        match = re.search(r"\{.*?\}", text, re.DOTALL)
-
-        if match:
-            return json.loads(match.group())
-
-        return {}
-
     def analyze(self, state):
 
-        diagnosis = {
-            "error_log": state.get("error_log"),
-            "file_path": state.get("file_path"),
-            "fix_description": state.get("fix_description")
-        }
+        error_log = state.get("error_log")
+        file_path = state.get("file_path")
 
-        prompt = ROOT_CAUSE_PROMPT.format(
-            diagnosis=json.dumps(diagnosis, indent=2)
-        )
+        prompt = f"""
+You are a DevOps root cause analysis expert.
+
+File:
+{file_path}
+
+Error log:
+{error_log}
+
+Identify the root cause of the failure.
+"""
 
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[
-                {"role": "system", "content": "You are a CI debugging expert."},
+                {"role": "system", "content": "You are a debugging expert."},
                 {"role": "user", "content": prompt}
             ]
         )
 
-        text = response.choices[0].message.content
+        root_cause = response.choices[0].message.content.strip()
 
-        result = self.extract_json(text)
-
-        state["root_cause"] = result.get(
-            "root_cause",
-            "Root cause could not be determined."
-        )
-
-        state["confidence_score"] = result.get("confidence_score", 0.7)
+        state["root_cause"] = root_cause
+        state["confidence_score"] = 0.9
 
         state["agent_logs"].append(
-            "[RootCauseAgent] Root cause analysis completed"
+            "[RootCauseAgent] Root cause identified"
         )
 
-        return state
+        # Send state directly to SurgeonAgent
+        surgeon = SurgeonAgent()
+
+        return surgeon.repair(state)
