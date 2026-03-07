@@ -107,24 +107,87 @@ class K8sPodWatcher:
         namespace = getattr(metadata, "namespace", None) or "default"
         phase = getattr(status, "phase", None) or "Unknown"
 
-        key = f"{namespace}/{pod_name}"
-        previous_phase = self._status_cache.get(key)
-        self._status_cache[key] = phase
-
-        # Emit only first observation or actual phase transitions.
-        if previous_phase is not None and previous_phase == phase:
+        failure_detail = self._extract_failure_detail(status)
+        # Emit only actionable error states.
+        if not failure_detail and phase not in {"Failed", "Unknown"}:
             return None
 
+        signature = f"{phase}|{failure_detail or ''}"
+        key = f"{namespace}/{pod_name}"
+        previous_signature = self._status_cache.get(key)
+        self._status_cache[key] = signature
+        if previous_signature == signature:
+            return None
+
+        previous_phase = previous_signature.split("|", 1)[0] if previous_signature else None
+        error_reason = failure_detail.split(":", 1)[0] if failure_detail else phase
+        log_message = (
+            f"Pod {namespace}/{pod_name} error: {failure_detail} (phase={phase}, event={event_type})"
+            if failure_detail
+            else f"Pod {namespace}/{pod_name} entered phase {phase} ({event_type})"
+        )
         return {
             "source": "kubernetes",
             "service": pod_name,
-            "log": f"Pod {namespace}/{pod_name} changed: {previous_phase or 'None'} -> {phase} ({event_type})",
-            "error": phase,
+            "log": log_message,
+            "error": error_reason,
             "_raw_kubernetes_event": {
                 "namespace": namespace,
                 "pod": pod_name,
                 "event_type": event_type,
                 "previous_phase": previous_phase,
                 "current_phase": phase,
+                "failure_detail": failure_detail,
             },
         }
+
+    def _extract_failure_detail(self, status: Any) -> str | None:
+        if status is None:
+            return None
+
+        container_statuses = list(getattr(status, "init_container_statuses", None) or [])
+        container_statuses.extend(getattr(status, "container_statuses", None) or [])
+
+        waiting_error_reasons = {
+            "CrashLoopBackOff",
+            "ImagePullBackOff",
+            "ErrImagePull",
+            "CreateContainerConfigError",
+            "CreateContainerError",
+            "RunContainerError",
+            "InvalidImageName",
+            "OOMKilled",
+        }
+
+        for container in container_statuses:
+            name = getattr(container, "name", "container")
+            state = getattr(container, "state", None)
+            waiting = getattr(state, "waiting", None)
+            if waiting is not None:
+                reason = str(getattr(waiting, "reason", "") or "").strip()
+                message = str(getattr(waiting, "message", "") or "").strip()
+                if reason in waiting_error_reasons or "backoff" in reason.lower() or "error" in reason.lower():
+                    suffix = f": {message}" if message else ""
+                    return f"{reason or 'WaitingError'} in {name}{suffix}"
+
+            terminated = getattr(state, "terminated", None)
+            if terminated is not None:
+                reason = str(getattr(terminated, "reason", "") or "").strip() or "Terminated"
+                message = str(getattr(terminated, "message", "") or "").strip()
+                exit_code = getattr(terminated, "exit_code", None)
+                if exit_code not in (None, 0) or reason.lower() not in {"completed"}:
+                    exit_part = f" (exit_code={exit_code})" if exit_code is not None else ""
+                    msg_part = f": {message}" if message else ""
+                    return f"{reason} in {name}{exit_part}{msg_part}"
+
+        conditions = getattr(status, "conditions", None) or []
+        for condition in conditions:
+            condition_type = str(getattr(condition, "type", "") or "").strip()
+            condition_status = str(getattr(condition, "status", "") or "").strip()
+            reason = str(getattr(condition, "reason", "") or "").strip()
+            message = str(getattr(condition, "message", "") or "").strip()
+            if condition_type == "Ready" and condition_status == "False" and (reason or message):
+                msg_part = f": {message}" if message else ""
+                return f"{reason or 'NotReady'}{msg_part}"
+
+        return None

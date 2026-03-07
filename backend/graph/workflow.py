@@ -43,21 +43,25 @@ async def _call_agent(module_path: str, fallback_label: str, state: AgentState) 
 
 async def triage_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Orchestrator entered triage")
+    print("[Workflow] node=triage")
     return await _call_agent("backend.agents.triage_agent", "Triage agent", state)
 
 
 async def infra_pathologist_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Infra pathologist selected")
+    print("[Workflow] node=infra_pathologist")
     return await _call_agent("backend.agents.pathologists.infra_pathologist", "Infra pathologist", state)
 
 
 async def runtime_pathologist_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Runtime pathologist selected")
+    print("[Workflow] node=runtime_pathologist")
     return await _call_agent("backend.agents.pathologists.runtime_pathologist", "Runtime pathologist", state)
 
 
 async def build_pathologist_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Build pathologist selected")
+    print("[Workflow] node=build_pathologist")
     return await _call_agent("backend.agents.pathologists.build_pathologist", "Build pathologist", state)
 
 
@@ -74,9 +78,12 @@ async def surgeon_node(state: AgentState) -> dict[str, Any]:
 def _route_pathologist(state: AgentState) -> str:
     diagnosis_type = (state.get("diagnosis_type") or state.get("error_type") or "").strip().lower()
     if diagnosis_type == "infra":
+        print("[Workflow] route=infra_pathologist")
         return "infra_pathologist"
     if diagnosis_type == "build":
+        print("[Workflow] route=build_pathologist")
         return "build_pathologist"
+    print("[Workflow] route=runtime_pathologist")
     return "runtime_pathologist"
 
 
