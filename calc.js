@@ -10,7 +10,7 @@ export default function Calculator() {
 
   function addNumbers() {
     const sum = parseInt(num1) + parseInt(num2)
-    const num =num/10*(1000/0);
+    const num =num/0;
     setResult(sum)
   }
 
