@@ -1,13 +1,7 @@
-diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
-index aa21b6b..cf4e0d2 100644
---- a/.github/workflows/main.yml
-+++ b/.github/workflows/main.yml
-@@ -3,3 +3,8 @@ steps:
-     uses: actions/checkout@v3
-   - name: Setup Node.js
-     uses: actions/setup-node@v4
-+steps:
-+  - name: Setup Node.js
-+    uses: actions/setup-node@v4
-+    with:
-+      node-version: '16'
+diff --git a/Dockerfile b/Dockerfile
+index 5a702df..5b46969 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -1 +1,2 @@
+ FROM python:3.10
++FROM python:3.10
