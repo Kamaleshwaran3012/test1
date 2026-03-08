@@ -1,9 +1,8 @@
-diff --git a/web/package.json b/web/package.json
-index f7b36ac..e727538 100644
---- a/web/package.json
-+++ b/web/package.json
-@@ -4,3 +4,4 @@ image: existing/image:v1
- FROM python:3.11
- FROM python:3.11
- image: existing/image:v1
-+image: existing/image:v1
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -0,0 +1,5 @@
++steps:
++  - name: Checkout code
++    uses: actions/checkout@v3
++  - name: Setup Node.js
++    uses: actions/setup-node@v4
