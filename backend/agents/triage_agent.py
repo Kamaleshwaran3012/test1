@@ -95,10 +95,10 @@ def _deterministic_triage(state: AgentState) -> dict[str, str] | None:
         "500 internal server error",
     )
 
-    if any(token in combined for token in build_tokens):
-        return {"error_type": "build", "suspected_service": state.get("suspected_service") or "github-actions"}
     if any(token in combined for token in runtime_tokens):
         return {"error_type": "runtime", "suspected_service": state.get("suspected_service") or "application-runtime"}
+    if any(token in combined for token in build_tokens):
+        return {"error_type": "build", "suspected_service": state.get("suspected_service") or "github-actions"}
     if any(token in combined for token in infra_tokens):
         return {"error_type": "infra", "suspected_service": state.get("suspected_service") or "kubernetes"}
     if source == "kubernetes":

@@ -2,6 +2,7 @@ import os
 import tempfile
 import subprocess
 from groq import Groq
+from utils.patch_builder import generate_git_patch_from_text
 
 
 class SurgeonAgent:
@@ -45,6 +46,43 @@ class SurgeonAgent:
                 lines = lines[:-1]
             cleaned = "\n".join(lines).strip()
         return cleaned
+
+    def _resolve_existing_file_path(self, file_path):
+        if not file_path:
+            return None
+        if os.path.exists(file_path):
+            return file_path
+
+        normalized = str(file_path).replace("\\", "/").strip()
+        candidate_roots = [os.getcwd(), os.path.join(os.getcwd(), "aibrainy")]
+
+        # Try common repo-root anchored resolution first.
+        for root in candidate_roots:
+            candidate = os.path.normpath(os.path.join(root, normalized))
+            if os.path.exists(candidate):
+                return candidate
+
+        # Fallback: basename lookup in workspace to handle file hints like "package.json".
+        target_name = os.path.basename(normalized)
+        if not target_name:
+            return None
+
+        best_match = None
+        best_depth = None
+        for root in candidate_roots:
+            if not os.path.isdir(root):
+                continue
+            for dirpath, dirnames, filenames in os.walk(root):
+                dirnames[:] = [d for d in dirnames if d not in {".git", "venv", "node_modules", "__pycache__"}]
+                if target_name in filenames:
+                    rel = os.path.relpath(os.path.join(dirpath, target_name), root)
+                    depth = rel.count(os.sep)
+                    if best_match is None or depth < best_depth:
+                        best_match = os.path.join(dirpath, target_name)
+                        best_depth = depth
+            if best_match:
+                break
+        return best_match
 
     # -------------------------------------------------
     # Ask Groq AI to generate fix
@@ -158,9 +196,98 @@ Current file:
         file_path = state.get("file_path")
         line_number = state.get("line_number")
         replacement_code = state.get("replacement_code")
+        old_code = state.get("old_code")
+        new_code = state.get("new_code")
         state.setdefault("agent_logs", [])
+        state["agent_logs"].append(
+            f"[SurgeonAgent] Start repair file_path={file_path} line_number={line_number} "
+            f"has_replacement_code={bool(replacement_code)} has_old_new={bool(old_code and new_code)}"
+        )
+        resolved_file_path = self._resolve_existing_file_path(file_path)
+        if resolved_file_path and resolved_file_path != file_path:
+            state["agent_logs"].append(
+                f"[SurgeonAgent] Resolved file path {file_path} -> {resolved_file_path}"
+            )
+            file_path = resolved_file_path
+            state["file_path"] = resolved_file_path
+
+        # Deterministic direct patch path for webhook simulations that provide before/after code.
+        if isinstance(old_code, str) and isinstance(new_code, str) and old_code and new_code:
+            patch = None
+            if file_path and os.path.exists(file_path):
+                try:
+                    current_code, _ = self._read_file(file_path)
+                except Exception:
+                    current_code = ""
+                replacement_attempted = False
+                old_variants = [old_code, old_code.replace("\r\n", "\n"), old_code.replace("\n", "\r\n")]
+                for old_variant in old_variants:
+                    if not old_variant:
+                        continue
+                    if old_variant in current_code:
+                        # Keep newline style aligned with matched variant.
+                        if "\r\n" in old_variant and "\r\n" not in new_code:
+                            new_variant = new_code.replace("\n", "\r\n")
+                        elif "\n" in old_variant and "\r\n" in new_code:
+                            new_variant = new_code.replace("\r\n", "\n")
+                        else:
+                            new_variant = new_code
+                        updated_code = current_code.replace(old_variant, new_variant, 1)
+                        patch = generate_git_patch_from_text(file_path, current_code, updated_code)
+                        replacement_attempted = True
+                        break
+                if not replacement_attempted:
+                    state["agent_logs"].append(
+                        "[SurgeonAgent] old_code not found in target file; using raw old/new patch"
+                    )
+            if not patch:
+                patch = generate_git_patch_from_text(file_path or "unknown_file", old_code, new_code)
+            if patch:
+                state["agent_logs"].append(
+                    f"[SurgeonAgent] Deterministic old/new patch generated length={len(patch)}"
+                )
+                state["patch_generated"] = patch
+                state["pr_title"] = f"Automated Fix: {os.path.basename(file_path or 'unknown_file')}"
+                state["pr_description"] = (
+                    f"Automated CI Repair\n\n"
+                    f"Root Cause:\n{state.get('root_cause')}\n\n"
+                    f"File Modified:\n{file_path}\n\n"
+                    f"This fix was generated automatically by the AI repair agent."
+                )
+                state["agent_logs"].append("[SurgeonAgent] Patch generated from old_code/new_code payload")
+                return state
+            state["agent_logs"].append("[SurgeonAgent] old_code/new_code present but produced empty patch")
 
         if not os.path.exists(file_path):
+            synthetic_patch = None
+            if isinstance(old_code, str) and isinstance(new_code, str) and old_code and new_code:
+                synthetic_patch = generate_git_patch_from_text(file_path or "unknown_file", old_code, new_code)
+            elif replacement_code:
+                replacement_line = replacement_code
+                if not replacement_line.endswith(("\n", "\r")):
+                    replacement_line += "\n"
+                synthetic_patch = generate_git_patch_from_text(
+                    file_path or "unknown_file",
+                    "",
+                    replacement_line,
+                )
+
+            if synthetic_patch:
+                state["agent_logs"].append(
+                    f"[SurgeonAgent] Synthetic patch generated for missing file length={len(synthetic_patch)}"
+                )
+                state["patch_generated"] = synthetic_patch
+                state["pr_title"] = f"Automated Fix: {os.path.basename(file_path or 'unknown_file')}"
+                state["pr_description"] = (
+                    f"Automated CI Repair\n\n"
+                    f"Root Cause:\n{state.get('root_cause')}\n\n"
+                    f"File Modified:\n{file_path}\n\n"
+                    f"This fix was generated automatically by the AI repair agent."
+                )
+                state["agent_logs"].append(
+                    f"[SurgeonAgent] Generated synthetic patch for missing file: {file_path}"
+                )
+                return state
 
             state["patch_generated"] = None
             state["pr_title"] = None
@@ -169,6 +296,7 @@ Current file:
             state["agent_logs"].append(
                 f"[SurgeonAgent] File not found: {file_path}"
             )
+            state["agent_logs"].append("[SurgeonAgent] patch_generated=None reason=file_missing_no_synthetic_patch")
 
             return state
 
@@ -196,6 +324,9 @@ Current file:
         else:
             # generate AI fix
             fixed_code = self._generate_fix_with_ai(original_code, state)
+            state["agent_logs"].append(
+                f"[SurgeonAgent] AI fix generated original_len={len(original_code)} fixed_len={len(fixed_code)}"
+            )
 
         # detect invalid AI response
         if (
@@ -208,6 +339,7 @@ Current file:
             state["agent_logs"].append(
                 "[SurgeonAgent] AI returned analysis instead of code"
             )
+            state["agent_logs"].append("[SurgeonAgent] patch_generated=None reason=invalid_ai_output")
 
             return state
 
@@ -222,6 +354,15 @@ Current file:
 
         # generate patch
         patch = self._generate_git_patch(file_path, fixed_code, encoding)
+        state["agent_logs"].append(
+            f"[SurgeonAgent] Git patch attempt length={len(patch) if patch else 0}"
+        )
+        if not patch:
+            # Fallback to utility patch builder to keep patch generation resilient.
+            patch = generate_git_patch_from_text(file_path, original_code, fixed_code)
+            state["agent_logs"].append(
+                f"[SurgeonAgent] Patch-builder fallback length={len(patch) if patch else 0}"
+            )
 
         if not patch:
 
@@ -229,6 +370,7 @@ Current file:
             state["agent_logs"].append(
                 "[SurgeonAgent] No patch generated"
             )
+            state["agent_logs"].append("[SurgeonAgent] patch_generated=None reason=empty_diff")
 
             return state
 
@@ -249,6 +391,9 @@ Current file:
 
         state["agent_logs"].append(
             "[SurgeonAgent] Valid git patch generated"
+        )
+        state["agent_logs"].append(
+            f"[SurgeonAgent] patch_generated=SET length={len(patch)}"
         )
 
         return state

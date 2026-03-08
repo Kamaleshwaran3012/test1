@@ -23,16 +23,23 @@ class AgentState(TypedDict, total=False):
     line_number: Optional[int]
     fix_description: Optional[str]
     replacement_code: Optional[str]
+    old_code: Optional[str]
+    new_code: Optional[str]
     error_source: Optional[str]
 
     # ROOT CAUSE
     root_cause: Optional[str]
     confidence_score: Optional[float]
+    fix_suggestion: Optional[str]
 
     # SURGEON
     patch_generated: Optional[str]
     pr_title: Optional[str]
     pr_description: Optional[str]
+    repo_fix_applied: Optional[bool]
+    slack_notified: Optional[bool]
+    pr_created: Optional[bool]
+    code_review_triggered: Optional[bool]
 
     # PROCESS CONTROL
     iteration_count: int

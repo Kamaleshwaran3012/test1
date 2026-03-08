@@ -136,11 +136,18 @@ class WatchmanAgent:
             "line_number": None,
             "fix_description": None,
             "replacement_code": None,
+            "old_code": None,
+            "new_code": None,
             "root_cause": None,
             "confidence_score": None,
+            "fix_suggestion": None,
             "patch_generated": None,
             "pr_title": None,
             "pr_description": None,
+            "repo_fix_applied": False,
+            "slack_notified": False,
+            "pr_created": False,
+            "code_review_triggered": False,
             "iteration_count": 0,
             "processed_errors": [],
             "agent_logs": [],
@@ -226,6 +233,8 @@ class WatchmanAgent:
     async def _process_event(self, payload: dict[str, Any]) -> None:
         parsed_event = await self.parse_event_with_langchain(payload)
         state = self.initialize_state(parsed_event)
+        state["old_code"] = str(payload.get("old_code")) if payload.get("old_code") is not None else None
+        state["new_code"] = str(payload.get("new_code")) if payload.get("new_code") is not None else None
 
         state["agent_logs"].append(f"Watchman received event from {parsed_event.get('event_source')}")
         state["agent_logs"].append("Event normalized using LangChain")

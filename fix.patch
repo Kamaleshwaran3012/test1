@@ -1,13 +1,6 @@
-diff --git a/Test1/.github/workflows/ci.yml b/Test1/.github/workflows/ci.yml
-index a030528..f1cca58 100644
---- a/Test1/.github/workflows/ci.yml
-+++ b/Test1/.github/workflows/ci.yml
-@@ -16,7 +16,7 @@ jobs:
-         uses: actions/setup-node@v4
-         with:
-           node-version: 20
--
-+        run: npm install
-         run: Install dependencies
-         
- 
+diff --git a/web/package.json b/web/package.json
+index e69de29..1326d3b 100644
+--- a/web/package.json
++++ b/web/package.json
+@@ -0,0 +1 @@
++"image": "docker.io/library/httpd:latest"

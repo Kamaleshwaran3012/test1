@@ -52,6 +52,7 @@ async def infra_pathologist_node(state: AgentState) -> dict[str, Any]:
     print("[Workflow] node=infra_pathologist")
     result = await _call_agent("backend.agents.pathologists.infra_pathologist", "Infra pathologist", state)
     result["error_source"] = "infra_pathologist"
+    result.setdefault("agent_logs", []).append("Infra issue handled with suggestion-only flow; root cause skipped")
     return result
 
 
@@ -74,11 +75,6 @@ async def build_pathologist_node(state: AgentState) -> dict[str, Any]:
 async def root_cause_node(state: AgentState) -> dict[str, Any]:
     _append_log(state, "Root cause analysis started")
     return await _call_agent("backend.agents.root_cause_agent", "Root cause agent", state)
-
-
-async def surgeon_node(state: AgentState) -> dict[str, Any]:
-    _append_log(state, "Surgeon agent started")
-    return await _call_agent("backend.agents.surgeon_agent", "Surgeon agent", state)
 
 
 def _route_pathologist(state: AgentState) -> str:
@@ -111,7 +107,7 @@ def build_workflow():
             "build_pathologist": "build_pathologist",
         },
     )
-    graph.add_edge("infra_pathologist", "root_cause")
+    graph.add_edge("infra_pathologist", END)
     graph.add_edge("runtime_pathologist", "root_cause")
     graph.add_edge("build_pathologist", "root_cause")
     graph.add_edge("root_cause", END)

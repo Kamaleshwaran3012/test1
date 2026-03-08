@@ -67,14 +67,14 @@ def parse_json_dict(response_text: str) -> dict[str, Any]:
     if fenced:
         text = fenced.group(1).strip()
 
+    decoder = json.JSONDecoder()
     try:
-        value = json.loads(text)
+        value, _ = decoder.raw_decode(text)
     except json.JSONDecodeError:
         start = text.find("{")
-        end = text.rfind("}")
-        if start == -1 or end == -1 or end <= start:
+        if start == -1:
             raise
-        value = json.loads(text[start : end + 1])
+        value, _ = decoder.raw_decode(text[start:])
 
     if not isinstance(value, dict):
         raise ValueError(f"Expected JSON object, received {type(value).__name__}")
