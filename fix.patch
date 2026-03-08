@@ -1,13 +1,9 @@
-diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
-index f733e03..c9ad8c2 100644
---- a/.github/workflows/main.yml
-+++ b/.github/workflows/main.yml
-@@ -7,7 +7,7 @@ steps:
-   - name: Setup Node.js
-     uses: actions/setup-node@v4
-     with:
--steps:
-+uses: actions/setup-python@v4
-   - name: Setup Node.js
-     uses: actions/setup-node@v4
-     with:
+diff --git a/web/package.json b/web/package.json
+index 10455b9..7d167ac 100644
+--- a/web/package.json
++++ b/web/package.json
+@@ -21,3 +21,4 @@ image: existing/image:v1
+ FROM python:3.11
+ image: existing/image:v1
+ image: existing/image:v1
++image: existing/image:v1
