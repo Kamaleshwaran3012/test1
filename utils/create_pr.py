@@ -1,5 +1,29 @@
 from github import Github
 import os
+import re
+import subprocess
+
+
+def _infer_repo_full_name() -> str:
+    explicit = os.getenv("GITHUB_REPO", "").strip()
+    if explicit:
+        return explicit
+
+    result = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    remote = result.stdout.strip()
+
+    # Supports:
+    # - https://github.com/owner/repo.git
+    # - git@github.com:owner/repo.git
+    match = re.search(r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/.]+)(?:\.git)?$", remote)
+    if not match:
+        raise ValueError(f"Unable to infer GitHub repo from origin URL: {remote}")
+    return f"{match.group('owner')}/{match.group('repo')}"
 
 def create_pull_request():
 
@@ -7,13 +31,15 @@ def create_pull_request():
 
     g = Github(token)
 
-    repo = g.get_repo("Kamaleshwaran3012/test1")
+    repo = g.get_repo(_infer_repo_full_name())
+    head_branch = os.getenv("PR_HEAD_BRANCH", "surgeon_agents").strip() or "surgeon_agents"
+    base_branch = os.getenv("PR_BASE_BRANCH", "main").strip() or "main"
 
     pr = repo.create_pull(
         title="Automated CI Fix",
         body="Patch generated automatically by CI repair agent.",
-        head="surgeon_agents",
-        base="main"
+        head=head_branch,
+        base=base_branch
     )
 
     return pr.html_url
