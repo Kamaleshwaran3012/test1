@@ -2,6 +2,19 @@ from github import Github
 import os
 import re
 import subprocess
+from pathlib import Path
+from dotenv import load_dotenv
+
+
+_ENV_CANDIDATES = [
+    Path.cwd() / ".env",
+    Path.cwd() / "backend" / ".env",
+    Path(__file__).resolve().parents[1] / ".env",
+    Path(__file__).resolve().parents[1] / "backend" / ".env",
+]
+for _env in _ENV_CANDIDATES:
+    if _env.exists():
+        load_dotenv(dotenv_path=_env, override=False)
 
 
 def _infer_repo_full_name() -> str:
@@ -27,7 +40,9 @@ def _infer_repo_full_name() -> str:
 
 def create_pull_request():
 
-    token = os.getenv("GITHUB_TOKEN")
+    token = (os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_PAT") or "").strip()
+    if not token:
+        raise ValueError("Missing GitHub token. Set GITHUB_TOKEN (or GITHUB_PAT) in .env.")
 
     g = Github(token)
 
