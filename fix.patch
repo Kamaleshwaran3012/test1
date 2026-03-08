@@ -1,13 +1,9 @@
-diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
-index 98b375d..cd685f7 100644
---- a/.github/workflows/main.yml
-+++ b/.github/workflows/main.yml
-@@ -12,6 +12,8 @@ steps:
-     uses: actions/checkout@v3
-   - name: Checkout code
-     uses: actions/checkout@v3
-+  - name: Checkout code
-+    uses: actions/checkout@v3
-   - name: Setup Node.js
-     uses: actions/setup-node@v4
-     with:
+diff --git a/web/package.json b/web/package.json
+index 9f96f31..eba1eb6 100644
+--- a/web/package.json
++++ b/web/package.json
+@@ -11,3 +11,4 @@ image: existing/image:v1
+ FROM python:3.11
+ image: existing/image:v1
+ image: existing/image:v1
++FROM python:3.11
