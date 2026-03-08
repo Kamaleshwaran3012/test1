@@ -1,13 +1,13 @@
 diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
-index 2abceb6..d375f53 100644
+index d375f53..9fd3943 100644
 --- a/.github/workflows/main.yml
 +++ b/.github/workflows/main.yml
-@@ -8,6 +8,8 @@ steps:
-     uses: actions/setup-node@v4
-     with:
- steps:
-+  - name: Checkout code
-+    uses: actions/checkout@v3
+@@ -7,7 +7,7 @@ steps:
    - name: Setup Node.js
      uses: actions/setup-node@v4
      with:
+-steps:
++uses: actions/setup-python@v4
+   - name: Checkout code
+     uses: actions/checkout@v3
+   - name: Setup Node.js
