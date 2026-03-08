@@ -1,9 +1,9 @@
 diff --git a/web/package.json b/web/package.json
-index 8594145..f349fc0 100644
+index f349fc0..f7b36ac 100644
 --- a/web/package.json
 +++ b/web/package.json
-@@ -2,3 +2,4 @@
- "image": "docker.io/library/httpd:latest"
+@@ -3,3 +3,4 @@
  image: existing/image:v1
  FROM python:3.11
-+FROM python:3.11
+ FROM python:3.11
++image: existing/image:v1
