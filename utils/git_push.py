@@ -23,6 +23,6 @@ def push_changes():
 
     # Push current HEAD to target branch even if local target branch does not exist.
     subprocess.run(
-        ["git", "push", "origin", f"{source_branch}:{target_branch}"],
+        ["git", "push", "--force", "origin", f"{source_branch}:{target_branch}"],
         check=True
     )
