@@ -1,7 +1,8 @@
 diff --git a/web/package.json b/web/package.json
-index 1326d3b..c545114 100644
+index c545114..929504c 100644
 --- a/web/package.json
 +++ b/web/package.json
-@@ -1 +1,2 @@
+@@ -1,2 +1,3 @@
  "image": "docker.io/library/httpd:latest"
-+"image": "docker.io/library/httpd:latest"
+ "image": "docker.io/library/httpd:latest"
++image: existing/image:v1
