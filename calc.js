@@ -12,7 +12,7 @@ export default function Calculator() {
     const sum2 = parseInt(num1) + parseInt(num2)
     const num11=0;
     const num =num1/0
-    setResult(sums*100/0)
+    setResult(sums*10000/0)
   }
 
   function subtractNumbers() {
