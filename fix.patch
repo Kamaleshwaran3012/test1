@@ -1,9 +1,9 @@
 diff --git a/web/package.json b/web/package.json
-index f349fc0..f7b36ac 100644
+index f7b36ac..e727538 100644
 --- a/web/package.json
 +++ b/web/package.json
-@@ -3,3 +3,4 @@
+@@ -4,3 +4,4 @@ image: existing/image:v1
+ FROM python:3.11
+ FROM python:3.11
  image: existing/image:v1
- FROM python:3.11
- FROM python:3.11
 +image: existing/image:v1
