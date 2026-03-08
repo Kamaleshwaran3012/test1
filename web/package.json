@@ -2,3 +2,4 @@
 "image": "docker.io/library/httpd:latest"
 image: existing/image:v1
 FROM python:3.11
+FROM python:3.11
