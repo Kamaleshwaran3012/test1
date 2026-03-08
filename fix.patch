@@ -1,9 +1,15 @@
-diff --git a/web/package.json b/web/package.json
-index b2c266d..10455b9 100644
---- a/web/package.json
-+++ b/web/package.json
-@@ -20,3 +20,4 @@ image: existing/image:v1
- "image": "docker.io/library/httpd:latest"
- FROM python:3.11
- image: existing/image:v1
-+image: existing/image:v1
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index 89151c9..630eb2c 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -8,6 +8,10 @@ steps:
+     uses: actions/setup-node@v4
+     with:
+ steps:
++  - name: Setup Node.js
++    uses: actions/setup-node@v4
++    with:
++      node-version: '16'
+   - name: Checkout code
+     uses: actions/checkout@v3
+   - name: Setup Node.js
