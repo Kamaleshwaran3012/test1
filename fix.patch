@@ -1,11 +1,15 @@
-diff --git a/web/package.json b/web/package.json
-index 362d9c3..0e1a624 100644
---- a/web/package.json
-+++ b/web/package.json
-@@ -7,5 +7,5 @@ image: existing/image:v1
- image: existing/image:v1
- "react": "^18.2.0",
- image: existing/image:v1
--"image": "docker.io/library/httpd:latest"
-+"dependencies": { "express": "^4.18.2" }
- FROM python:3.11
+diff --git a/.github/workflows/main.yml b/.github/workflows/main.yml
+index cf4e0d2..2abceb6 100644
+--- a/.github/workflows/main.yml
++++ b/.github/workflows/main.yml
+@@ -3,6 +3,10 @@ steps:
+     uses: actions/checkout@v3
+   - name: Setup Node.js
+     uses: actions/setup-node@v4
++steps:
++  - name: Setup Node.js
++    uses: actions/setup-node@v4
++    with:
+ steps:
+   - name: Setup Node.js
+     uses: actions/setup-node@v4
