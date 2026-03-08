@@ -12,6 +12,8 @@ steps:
     uses: actions/checkout@v3
   - name: Checkout code
     uses: actions/checkout@v3
+  - name: Checkout code
+    uses: actions/checkout@v3
   - name: Setup Node.js
     uses: actions/setup-node@v4
     with:
