@@ -6,3 +6,4 @@ FROM python:3.11
 image: existing/image:v1
 image: existing/image:v1
 "react": "^18.2.0",
+image: existing/image:v1

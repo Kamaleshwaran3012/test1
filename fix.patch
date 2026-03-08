@@ -1,7 +1,9 @@
-diff --git a/Dockerfile b/Dockerfile
-index 5a702df..5b46969 100644
---- a/Dockerfile
-+++ b/Dockerfile
-@@ -1 +1,2 @@
- FROM python:3.10
-+FROM python:3.10
+diff --git a/web/package.json b/web/package.json
+index 8febf19..0d3f069 100644
+--- a/web/package.json
++++ b/web/package.json
+@@ -6,3 +6,4 @@ FROM python:3.11
+ image: existing/image:v1
+ image: existing/image:v1
+ "react": "^18.2.0",
++image: existing/image:v1
